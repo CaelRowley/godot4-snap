@@ -1,17 +1,86 @@
-name: my-snap-name # you probably want to 'snapcraft register <name>'
-base: core20 # the base snap is the execution environment for this snap
-version: '0.1' # just for humans, typically '1.2+git' or '1.3.2'
-summary: Single-line elevator pitch for your amazing snap # 79 char long summary
-description: |
-  This is my-snap's description. You have a paragraph or two to tell the
-  most important story about your snap. Keep it under 100 words though,
-  we live in tweetspace and your description wants to look good in the snap
-  store.
+name: godot4
+base: core22
+version: '4.0.2'
+summary: Godot Engine, the game engine you've been waiting for.
+description: The Godot Engine is a free, all-in-one, cross-platform game engine that makes it easy for you to create 2D and 3D games.
 
-grade: devel # must be 'stable' to release into candidate/stable channels
-confinement: devmode # use 'strict' once you have the right plugs and slots
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+compression: lzo
+
+layout:
+  /usr/share/drirc.d:
+    bind: $SNAP/usr/share/drirc.d
+  /usr/lib/x86_64-linux-gnu/dri:
+    bind: $SNAP/usr/lib/x86_64-linux-gnu/dri
+  /usr/share/vulkan:
+    bind: $SNAP/usr/share/vulkan
+  /usr/lib/x86_64-linux-gnu/libvulkan_intel.so:
+    bind-file: $SNAP/usr/lib/x86_64-linux-gnu/libvulkan_intel.so
+  /usr/lib/x86_64-linux-gnu/libvulkan_lvp.so:
+    bind-file: $SNAP/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so
+  /usr/lib/x86_64-linux-gnu/libvulkan_radeon.so:
+    bind-file: $SNAP/usr/lib/x86_64-linux-gnu/libvulkan_radeon.so
 
 parts:
-  my-part:
-    # See 'snapcraft plugins'
+  libs:
     plugin: nil
+    stage-packages:
+      - libspeechd2
+      - mesa-va-drivers
+      - mesa-vulkan-drivers
+      - vulkan-tools
+    prime:
+      - usr/lib/*/libspeech*
+      - usr/lib/*/dri
+      - usr/lib/*/libVk*
+      - usr/lib/*/libvulkan*
+      - usr/lib/*/libxcb-randr*
+      - usr/share/vulkan
+      - usr/bin/vk*
+
+  godot4:
+    plugin: dump
+    source: https://github.com/godotengine/godot/releases/download/$SNAPCRAFT_PROJECT_VERSION-stable/Godot_v$SNAPCRAFT_PROJECT_VERSION-stable_linux.x86_64.zip
+    stage-packages:
+      - libfontconfig1
+      - libx11-6
+
+  desktop:
+    plugin: dump
+    source: desktop
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/meta/gui
+      cp * $CRAFT_PART_INSTALL/meta/gui
+
+  cleanup:
+    after: [ godot4 ]
+    plugin: nil
+    build-snaps:  [core22]
+    override-prime: |
+      set -eux
+      for snap in "core22"; do
+          cd "/snap/$snap/current" && find . -type f,l -exec rm -f "$SNAPCRAFT_PRIME/{}" \;
+      done
+      cd /snap/gnome-42-2204/current
+      find . -type f,l -exec rm -f $SNAPCRAFT_PRIME/{} \;
+
+apps:
+  godot4:
+    extensions: [gnome]
+    command: Godot_v$SNAPCRAFT_PROJECT_VERSION-stable_linux.x86_64
+    desktop: meta/gui/godot4.desktop
+    plugs:
+      - home
+      - network
+      - audio-playback
+      - audio-record
+      - removable-media
+      - joystick
+      - hardware-observe
+    environment:
+      HOME: $SNAP_USER_COMMON
+      VK_ICD_FILENAMESr: /var/lib/snapd/lib/vulkan/icd.d/nvidia_icd.json:$SNAP/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:$SNAP/usr/share/vulkan/icd.d/intel_icd.x86_64.json
